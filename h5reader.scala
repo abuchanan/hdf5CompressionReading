@@ -1,5 +1,3 @@
-//package hdf5.reader
-
 import hdf.hdf5lib.H5
 import hdf.hdf5lib.HDF5Constants
 import java.nio.file.{Paths, Files}
