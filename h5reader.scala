@@ -98,8 +98,18 @@ object h5reader {
     println(chunkStart.deep.mkString(", "))
     println("Chunk End:")
     println(chunkEnd.deep.mkString(", "))
-    
-    
+  
+    //println("\n") 
+    //getListOfChunksOld(numberDims, chunkStart, chunkEnd) 
+    //println("\n")    
+
+    val numberChunks = findNumberOfChunks(numberDims, chunkStart, chunkEnd)
+    var chunks = Array.ofDim[Int](numberChunks, numberDims)
+    getListOfChunks(numberDims, chunkStart, chunkEnd, numberChunks, chunks)
+    println("\n")
+    chunks foreach { row => row foreach print; println }
+    println("\n")
+
     //
     //  Initialize shared memory
     //
@@ -135,8 +145,69 @@ object h5reader {
     
     H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
   }
-  
+ 
+  def findNumberOfChunks(ndims: Int, start: Array[Long], end: Array[Long]): Int = {
+    var nchunks: Int = 1
+    var dim          = 0
+    for (dim <- 0 to ndims-1){
+      nchunks = nchunks * (end(dim).toInt - start(dim).toInt + 1).toInt
+    }
+    nchunks
+  }
 
+  def getListOfChunks(ndims: Int, start: Array[Long], end: Array[Long], nchunks: Int, chunks: Array[Array[Int]]){
+    var chunk = 0
+    var dim   = 0
+    for (chunk <- 0 to nchunks-1){
+      //var chunkID = new Array[Int](ndims)
+      for (dim <- 0 to ndims-1){
+        val diff: Int    = end(dim).toInt - start(dim).toInt + 1
+        var divider: Int = 1
+        var div          = 0
+        for(div <- 0 to dim - 1){
+          divider    = divider * (end(div) - start(div) + 1).toInt
+        }
+        //chunkID(dim) = (floor(chunk/divider)%diff).toInt
+        chunks(chunk)(dim) = (floor(chunk/divider)%diff).toInt
+      }
+      //println(chunkID.deep.mkString(", "))
+      
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+ 
+  def getListOfChunksOld(ndims: Int, start: Array[Long], end: Array[Long]){
+    var nchunks: Int = 1
+    var dim          = 0
+    for (dim <- 0 to ndims-1){
+      nchunks = nchunks * (end(dim).toInt - start(dim).toInt + 1).toInt
+    }
+    var chunk = 0
+    dim       = 0
+    for (chunk <- 0 to nchunks-1){
+      var chunkID = new Array[Int](ndims)
+      for (dim <- 0 to ndims-1){
+        val diff: Int    = end(dim).toInt - start(dim).toInt + 1
+        var divider: Int = 1
+        var div          = 0
+        for(div <- 0 to dim - 1){
+          divider    = divider * (end(div) - start(div) + 1).toInt
+        }
+        chunkID(dim) = (floor(chunk/divider)%diff).toInt
+      }
+     println(chunkID.deep.mkString(", "))
+    } 
+  }
 
 
 
