@@ -8,33 +8,41 @@ object h5reader {
   val debug: Boolean = true
   
   def main(args: Array[String]): Unit = {
-    /*System.setProperty("java.library.path",
-			 System.getProperty("java.library.path") +
-			 java.io.File.pathSeparator +
-			 "/mnt/common/abuchan1/code/scala/hdf5/lib/")
-    println("starting")*/
+    // 
+    //testtest("/mnt/common/abuchan1/data/testData.h5", "/DS1")
     
-    //h5read("/mnt/common/abuchan1/data/testData.h5", "/DS1")
+
     
-    testing("/mnt/common/abuchan1/data/testData.h5", "/DS1")
+    readTester("/mnt/common/abuchan1/data/testData.h5", "/DS1")
   }
   
-  def testing(filename: String, dataset: String){
+  def readTester(filename: String, dataset: String){
+    //
+    //  Open file and data set
+    //
     var file_id     = H5.H5Fopen(filename, HDF5Constants.H5F_ACC_RDONLY, HDF5Constants.H5P_DEFAULT) // TODO: add try
     var dataset_id  = H5.H5Dopen(file_id, dataset);  // TODO: add try
-    var dspace = H5.H5Dget_space(dataset_id)
+    var dspace 	    = H5.H5Dget_space(dataset_id)
     
-    var x  = 0
+    // 
+    //  Define area of data set to read
+    //
+    var x  = 2
     var dx = 4
-    var y  = 0
+    var y  = 2
     var dy = 8
     
+    //
+    //  Define hyperslab and memory space
+    //
     var hyper_id   = H5.H5Sselect_hyperslab(dspace, HDF5Constants.H5S_SELECT_SET, Array[Long](x,y), null, Array[Long](x + dx, y + dy), null)
     var memspace   = H5.H5Screate_simple(2, Array[Long](x+dx,y+dy), Array[Long](32,64)) 
     var dset_datas = Array.ofDim[Double]((dx*dy).toInt)
-    
     //println(Array[Long](x + dx, y + dy).deep.mkString(", "))
     
+    //
+    // Perform the actual read
+    //
     var dread_id = H5Dread(dataset_id, HDF5Constants.H5T_NATIVE_DOUBLE, memspace, dspace, HDF5Constants.H5P_DEFAULT, dset_datas)
     if(debug)println(dset_datas.deep.mkString(", "))
   }
@@ -42,44 +50,54 @@ object h5reader {
   
   
   def H5Dread(dataset_id: Int, mem_type_id: Int, mem_space_id: Int, file_space_id: Int, xfer_plist_id: Int, buf: java.lang.Object){
+    //
+    //  Basic initialization stuff
+    //
     var dataSetSpace = H5.H5Dget_space(dataset_id)                 // TODO: add try
     var numberDims   = H5.H5Sget_simple_extent_ndims(dataSetSpace) // TODO: add try
     var dcpl_id      = H5.H5Dget_create_plist(dataset_id)          // TODO: add try
     val layout       = H5.H5Pget_layout(dcpl_id)                   // TODO: add try
     
-    //TODO: add layout check before this statement
-    var chunkSize    = new Array[Long](numberDims)
-    var ndims        = H5.H5Pget_chunk(dcpl_id, numberDims, chunkSize)  // TODO: add try
-    
+    //
+    //  Check if data set is chunked
+    //
+    if(layout != HDF5Constants.H5D_CHUNKED){
+      H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
+    }
+
+    // Get chunk size and number of dimensions
+    var chunkSize  = new Array[Long](numberDims)
+    var ndims      = H5.H5Pget_chunk(dcpl_id, numberDims, chunkSize)  // TODO: add try
     var dimSize    = new Array[Long](numberDims)
     var maxDimSize = new Array[Long](numberDims)
     ndims          = H5.H5Sget_simple_extent_dims(dataSetSpace, dimSize, maxDimSize)
-    
-    if(layout != HDF5Constants.H5D_CHUNKED){
-      println("NOT CHUNKED!!!!!!!!")
-    }
-    
+   
+    //
+    //  Find the read bounds of the hyper slab
+    //
     //TODO: anticipate H5S_ALL
     var readStart = new Array[Long](numberDims)
     var readEnd   = new Array[Long](numberDims)
     H5.H5Sget_select_bounds(file_space_id, readStart, readEnd)
     
     
-    
+    //
+    //  Find which chunks need to be read
+    //
     var chunkStart = new Array[Long](numberDims)
     var chunkEnd   = new Array[Long](numberDims)
     for (dim <- 0 to numberDims - 1){
       //TODO: get it to work with H5Sget_select_elem_pointlist and H5Sget_select_elem_npoints 
       chunkStart(dim) = math.floor(readStart(dim)/chunkSize(dim)).toLong
       chunkEnd(dim)   = math.floor(readEnd(dim)  /chunkSize(dim)).toLong
-      println("start: \t" + readStart(dim) + "/" + chunkSize(dim) + " = " + chunkStart(dim))
-      println("end: \t" + readEnd(dim) + "/" + chunkSize(dim) + " = " + chunkEnd(dim))
+      println("dim " + dim + ") start: \t" + readStart(dim) + "/" + chunkSize(dim) + " = " + chunkStart(dim))
+      println("dim " + dim + ") end: \t" + readEnd(dim) + "/" + chunkSize(dim) + " = " + chunkEnd(dim))
     }
     
-    //println("Chunk Start:")
-    //println(chunkStart.deep.mkString(", "))
-    //println("Chunk End:")
-    //println(chunkEnd.deep.mkString(", "))
+    println("Chunk Start:")
+    println(chunkStart.deep.mkString(", "))
+    println("Chunk End:")
+    println(chunkEnd.deep.mkString(", "))
     
     
     //
@@ -118,7 +136,17 @@ object h5reader {
     H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
   }
   
-  def h5read(filename: String, dataset: String){
+
+
+
+
+  //
+  //
+  //
+  //	IGNORE THIS TEST FUNCTION
+  //
+  //
+  def testtest(filename: String, dataset: String){
     var file_id = -1
     var dataset_id = -1
     var dcpl_id = -1
