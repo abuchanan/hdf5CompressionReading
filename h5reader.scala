@@ -27,9 +27,9 @@ object h5reader {
     // 
     //  Define area of data set to read
     //
-    var x  = 2
+    var x  = 12
     var dx = 4
-    var y  = 2
+    var y  = 16
     var dy = 8
     
     //
@@ -98,53 +98,64 @@ object h5reader {
     println(chunkStart.deep.mkString(", "))
     println("Chunk End:")
     println(chunkEnd.deep.mkString(", "))
-  
-    //println("\n") 
-    //getListOfChunksOld(numberDims, chunkStart, chunkEnd) 
-    //println("\n")    
+     
 
     val numberChunks = findNumberOfChunks(numberDims, chunkStart, chunkEnd)
     var chunks = Array.ofDim[Int](numberChunks, numberDims)
     getListOfChunks(numberDims, chunkStart, chunkEnd, numberChunks, chunks)
-    println("\n")
-    chunks foreach { row => row foreach print; println }
-    println("\n")
+    //println("\n")
+    //chunks foreach { row => row foreach print; println }
+    //println("\n")
 
     //
     //  Initialize shared memory
     //
-    if(!Files.exists(Paths.get("/dev/shm/chunks"))){
+    var sharedDir: String = "/dev/shm/chunks"
+    if(!Files.exists(Paths.get(sharedDir))){
       // Chunks folder does not exist
-      new java.io.File("/dev/shm/chunks").mkdirs
+      new java.io.File(sharedDir).mkdirs
     }
     
     var file_id = 123456789.toString
-    if(!Files.exists(Paths.get("/dev/shm/chunks/" + file_id))){
+    sharedDir   = sharedDir + "/" + file_id
+    if(!Files.exists(Paths.get(sharedDir))){
       // File folder does not exist
-      new java.io.File("/dev/shm/chunks/" + file_id).mkdirs
+      new java.io.File(sharedDir).mkdirs
     }
     
     var ds_id = 123456789.toString
-    if(!Files.exists(Paths.get("/dev/shm/chunks/" + file_id + "/" + ds_id))){
+    sharedDir = sharedDir + "/" + ds_id
+    if(!Files.exists(Paths.get(sharedDir))){
       // dataset folder does not exist
-      new java.io.File("/dev/shm/chunks/" + file_id + "/" + ds_id).mkdirs
+      new java.io.File(sharedDir).mkdirs
     }
     
     //
     //  Read chunk
-    //
-    var chunkID = 0
-    if(!Files.exists(Paths.get("/dev/shm/chunks/" + file_id + "/" + ds_id + "/" + chunkID))){
-      // Chunk is not in memory 
-      
-    } else {
-      // Chunk already loaded in memory
-      
-    }
+    // 
+   loadAllChunks(chunks, chunkSize, sharedDir)
     
     
     H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
   }
+
+  //Load all chunks into memory first
+  def loadAllChunks(chunks: Array[Array[Int]], chunkSize: Array[Long], dir: String){
+    for(chunk <- chunks){
+      val chunkID:String = chunk.deep.mkString("-")
+      val curdir = dir + "/" + chunkID
+      if(!Files.exists(Paths.get(curdir))){
+        if(debug) println("NOT FOUND: " + curdir)
+        loadChunk(curdir, chunk, chunkSize)
+      } //else {
+      //  if(debug) println("FOUND:     " + curdir)
+      //}
+    }
+  }
+  def loadChunk(filename: String, chunk: Array[Int], chunkSize: Array[Long]){}
+  //Read all data from chunks not H5Dread
+  def readChunk(filename: String, chunk: Array[Int], start: Array[Long], end: Array[Long]){}
+
  
   def findNumberOfChunks(ndims: Int, start: Array[Long], end: Array[Long]): Int = {
     var nchunks: Int = 1
@@ -168,7 +179,7 @@ object h5reader {
           divider    = divider * (end(div) - start(div) + 1).toInt
         }
         //chunkID(dim) = (floor(chunk/divider)%diff).toInt
-        chunks(chunk)(dim) = (floor(chunk/divider)%diff).toInt
+        chunks(chunk)(dim) = (floor(chunk/divider)%diff).toInt + start(dim).toInt
       }
       //println(chunkID.deep.mkString(", "))
       
