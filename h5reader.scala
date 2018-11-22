@@ -1,6 +1,7 @@
 import hdf.hdf5lib.H5
 import hdf.hdf5lib.HDF5Constants
 import java.nio.file.{Paths, Files}
+import java.io.{BufferedWriter, FileWriter}
 import java.io.File
 import math._
 
@@ -27,17 +28,17 @@ object h5reader {
     // 
     //  Define area of data set to read
     //
-    var x  = 12
-    var dx = 4
-    var y  = 16
-    var dy = 8
+    var x  = 7
+    var dx = 2
+    var y  = 7
+    var dy = 4
     
     //
     //  Define hyperslab and memory space
     //
     var hyper_id   = H5.H5Sselect_hyperslab(dspace, HDF5Constants.H5S_SELECT_SET, Array[Long](x,y), null, Array[Long](x + dx, y + dy), null)
     var memspace   = H5.H5Screate_simple(2, Array[Long](x+dx,y+dy), Array[Long](32,64)) 
-    var dset_datas = Array.ofDim[Double]((dx*dy).toInt)
+    var dset_datas = Array.ofDim[Double]((dx*dy).toInt + 1)
     //println(Array[Long](x + dx, y + dy).deep.mkString(", "))
     
     //
@@ -161,8 +162,9 @@ object h5reader {
     var dataSize:  Int         = 1
     println("Reading chunk " + chunk.deep.mkString("-") + ": ")
     for (dim <- 0 to ndims-1){
+
       readStart(dim) = chunk(dim) * chunkSize(dim)
-      readEnd(dim)   = readStart(dim) + chunkSize(dim) // might have to subtract 1
+      readEnd(dim)   = readStart(dim) + chunkSize(dim) - 1 // might have to subtract 1
       dataSize = dataSize * (chunkSize(dim)).toInt
       println("\tdim " + dim + " starting " + readStart(dim) + " ending " + readEnd(dim))
     }
@@ -170,12 +172,48 @@ object h5reader {
     // ask for datatype as input
     var hyper_id = H5.H5Sselect_hyperslab(dspace, HDF5Constants.H5S_SELECT_SET, readStart, null, readEnd, null)
     var memspace = H5.H5Screate_simple(ndims, readEnd, maxDimSize)
-    var buf =  Array.ofDim[Double](dataSize) // TODO: change to match input datatype or ask kun
+    var buf = new Array[Double](dataSize) // TODO: change to match input datatype or ask kun
 
-    H5.H5Dread(dataset_id, HDF5Constants.H5T_NATIVE_DOUBLE, memspace, dspace, HDF5Constants.H5P_DEFAULT, buf) 
+    try{
+      H5.H5Dread(dataset_id, HDF5Constants.H5T_NATIVE_DOUBLE, memspace, dspace, HDF5Constants.H5P_DEFAULT, buf) 
+     
+      val file = new File(filename)
+      val bw = new BufferedWriter(new FileWriter(file))
+      buf.foreach(entry => bw.write(entry + "\n"))
+      bw.close()
+    }
+    catch{
+      case e: Exception => println(e)
+      case unknown : Throwable => println(unknown)
+    }
+
+    println(" ")
+
   }
   //Read all data from chunks not H5Dread
-  def readChunk(filename: String, chunk: Array[Int], start: Array[Long], end: Array[Long]){}
+  def readData(dir: String, ndims: Int, chunkSize: Array[Int], start: Array[Long], end: Array[Long]){
+    var numCells = 1
+    var dim = 0
+    var cell = 0
+    for (dim  <- 0 to ndims-1){
+      numCells = numCells * (end(dim) - start(dim) + 1).toInt
+    }
+    for (cell <- 0 to numCells-1){
+      var cord = new Array[Long](ndims)
+      getCord(ndims, start, end, cell, cord)
+      println("cell " + cell + " = " + cord.deep.mkString(","))
+    }
+  }
+  def getCord(ndims: Int, start: Array[Long], end: Array[Long], cell: Int, cord: Array[Long]){
+    for (dim <- 0 to ndims-1){
+      val dif = end(dim) - start(dim) + 1
+      var divider = 1
+      for (div <- 0 to dim-1){
+        divider = divider * (end(div) - start(div) + 1).toInt
+      }
+      cord(dim) = (floor(cell/divider)%dif).toInt + start(dim).toInt
+    }
+  }
 
  
   def findNumberOfChunks(ndims: Int, start: Array[Long], end: Array[Long]): Int = {
