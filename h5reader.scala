@@ -133,26 +133,47 @@ object h5reader {
     //
     //  Read chunk
     // 
-   loadAllChunks(chunks, chunkSize, sharedDir)
+   loadAllChunks(chunks, chunkSize, sharedDir, dataset_id, ndims)
     
     
     H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
   }
 
   //Load all chunks into memory first
-  def loadAllChunks(chunks: Array[Array[Int]], chunkSize: Array[Long], dir: String){
+  def loadAllChunks(chunks: Array[Array[Int]], chunkSize: Array[Long], dir: String, dataset_id: Int, ndims: Int){
     for(chunk <- chunks){
       val chunkID:String = chunk.deep.mkString("-")
       val curdir = dir + "/" + chunkID
       if(!Files.exists(Paths.get(curdir))){
         if(debug) println("NOT FOUND: " + curdir)
-        loadChunk(curdir, chunk, chunkSize)
-      } //else {
-      //  if(debug) println("FOUND:     " + curdir)
-      //}
+        loadChunk(curdir, chunk, chunkSize, dataset_id, ndims: Int)
+      } 
     }
   }
-  def loadChunk(filename: String, chunk: Array[Int], chunkSize: Array[Long]){}
+  def loadChunk(filename: String, chunk: Array[Int], chunkSize: Array[Long], dataset_id: Int, ndims: Int){
+    var dimSize = new Array[Long](ndims)
+    var maxDimSize = new Array[Long](ndims) 
+    var dspace = H5.H5Dget_space(dataset_id)
+    H5.H5Sget_simple_extent_dims(dspace, dimSize, maxDimSize)
+
+    var readStart: Array[Long] = new Array(ndims)
+    var readEnd:   Array[Long] = new Array(ndims)
+    var dataSize:  Int         = 1
+    println("Reading chunk " + chunk.deep.mkString("-") + ": ")
+    for (dim <- 0 to ndims-1){
+      readStart(dim) = chunk(dim) * chunkSize(dim)
+      readEnd(dim)   = readStart(dim) + chunkSize(dim) // might have to subtract 1
+      dataSize = dataSize * (chunkSize(dim)).toInt
+      println("\tdim " + dim + " starting " + readStart(dim) + " ending " + readEnd(dim))
+    }
+
+    // ask for datatype as input
+    var hyper_id = H5.H5Sselect_hyperslab(dspace, HDF5Constants.H5S_SELECT_SET, readStart, null, readEnd, null)
+    var memspace = H5.H5Screate_simple(ndims, readEnd, maxDimSize)
+    var buf =  Array.ofDim[Double](dataSize) // TODO: change to match input datatype or ask kun
+
+    H5.H5Dread(dataset_id, HDF5Constants.H5T_NATIVE_DOUBLE, memspace, dspace, HDF5Constants.H5P_DEFAULT, buf) 
+  }
   //Read all data from chunks not H5Dread
   def readChunk(filename: String, chunk: Array[Int], start: Array[Long], end: Array[Long]){}
 
