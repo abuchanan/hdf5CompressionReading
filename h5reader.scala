@@ -50,7 +50,7 @@ object h5reader {
 
   
   
-  def H5Dread(dataset_id: Int, mem_type_id: Int, mem_space_id: Int, file_space_id: Int, xfer_plist_id: Int, buf: java.lang.Object){
+  def H5Dread(dataset_id: Int, mem_type_id: Int, mem_space_id: Int, file_space_id: Int, xfer_plist_id: Int, buf: Array[_]){ // buf: java.lang.Object
     //
     //  Basic initialization stuff
     //
@@ -134,9 +134,10 @@ object h5reader {
     //
     //  Read chunk
     // 
-   loadAllChunks(chunks, chunkSize, sharedDir, dataset_id, ndims)
-    
-    
+    loadAllChunks(chunks, chunkSize, sharedDir, dataset_id, ndims)
+    readData(sharedDir, ndims, chunkSize, readStart, readEnd, buf)
+        
+
     H5.H5Dread(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
   }
 
@@ -191,7 +192,7 @@ object h5reader {
 
   }
   //Read all data from chunks not H5Dread
-  def readData(dir: String, ndims: Int, chunkSize: Array[Int], start: Array[Long], end: Array[Long]){
+  def readData(dir: String, ndims: Int, chunkSize: Array[Long], start: Array[Long], end: Array[Long], buf: Array[_]){
     var numCells = 1
     var dim = 0
     var cell = 0
@@ -199,11 +200,62 @@ object h5reader {
       numCells = numCells * (end(dim) - start(dim) + 1).toInt
     }
     for (cell <- 0 to numCells-1){
-      var cord = new Array[Long](ndims)
+      var cord  = new Array[Long](ndims)
+      var chunk = new Array[Long](ndims)
+      var local = new Array[Long](ndims)
       getCord(ndims, start, end, cell, cord)
-      println("cell " + cell + " = " + cord.deep.mkString(","))
+      //print("cell " + cell + " = " + cord.deep.mkString(","))
+      getChunkID(ndims, cord, chunkSize, chunk)
+      //print(" chunk  " + chunk.deep.mkString("-"))
+      getLocalCord(ndims, cord, chunk, chunkSize, local)
+      //println(" local " + local.deep.mkString("-"))
+      //TODO: read cell from chunk
+
+      //val lines = io.Source.fromFile(dir + "/" + chunk.deep.mkString("-")).getLines
+      //val cellVal: String = lines drop(getLinearCord(local, chunkSize)) next
+      //println(cellVal)
+
+
+      // TODO:
+      // 1. open the file once instead of everytime a read is required
+      // 2. read the data in a chunk centric way, not a data centric way
+      //    this means, instead of having a for loop iterating over every
+      //    cell. have a for loop iterating over all the chunks involved 
+      //    with the read and populate the results that way
+      val lines = io.Source.fromFile(dir + "/" + chunk.deep.mkString("-")).getLines.toArray
+      //println(lines(getLinearCord(local, chunkSize)))
+      val data = lines(getLinearCord(ndims, local, chunkSize))
+      //buf(cell) = data
+      print(data + ", ")
+    }
+    println()
+  }  
+
+  def getLinearCord(ndims: Int, local: Array[Long], chunkSize: Array[Long]): Int = {
+    var sum:Int = 0
+    for(dim <- 0 to ndims-1){ //TODO: check if this is backwards
+      var multiplier = 1
+      for (subDim <- 0 to dim-1){
+        multiplier = multiplier * chunkSize(subDim).toInt
+      }
+      sum = sum + (multiplier * local(dim).toInt)
+    }
+    sum
+  }
+
+  def getLocalCord(ndims: Int, cord: Array[Long], chunk: Array[Long], chunkSize: Array[Long], local: Array[Long]){
+    for (dim <- 0 to ndims-1){
+      val chunkOffset = chunk(dim) * chunkSize(dim)
+      local(dim) = cord(dim) - chunkOffset
     }
   }
+
+  def getChunkID(ndims: Int, cord: Array[Long], chunkSize: Array[Long], chunk: Array[Long]){
+    for (dim <- 0 to ndims-1){
+      chunk(dim) = floor(cord(dim)/chunkSize(dim)).toLong
+    }
+  } 
+
   def getCord(ndims: Int, start: Array[Long], end: Array[Long], cell: Int, cord: Array[Long]){
     for (dim <- 0 to ndims-1){
       val dif = end(dim) - start(dim) + 1
